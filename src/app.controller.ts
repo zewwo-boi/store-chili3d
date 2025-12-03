@@ -1,12 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
-import { UsersService } from './users/users.service';
+import { DataService } from './data/data.service';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly usersService: UsersService,
+    private readonly dataService: DataService,
   ) {}
 
   @Get()
@@ -14,8 +14,8 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @Get('/users')
-  async getAllUsers(): Promise<any[]> {
-    return this.usersService.findAllUsers();
-  }
+  // @Get('/data')
+  // async getAllData(): Promise<any[]> {
+  //   return this.dataService.findAllData();
+  // }
 }

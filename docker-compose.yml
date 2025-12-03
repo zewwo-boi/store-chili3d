@@ -1,0 +1,17 @@
+services:
+  postgres:
+    build: .
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=postgres
+    env_file:
+      - path: .env.development.local
+        required: false
+      - path: .env
+        required: false
+    volumes:
+      - postgres:/var/lib/postgresql
+        
+volumes:
+  postgres:

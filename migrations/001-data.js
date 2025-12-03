@@ -1,11 +1,13 @@
-exports.up = async function (DB) {
-  await DB`create table if not exists data {
-    id uuid primary key,
-    synced_timestamp timestamp with time zone,
-    time_record jsonb,
-  }`;
-}
+exports.up = async function (sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS data (
+      id uuid PRIMARY KEY,
+      synced_timestamp timestamp with time zone default current_timestamp,
+      time_record jsonb
+    );
+  `;
+};
 
-exports.down = async function (DB) {
-  // My pre-configured "undo" function
-}
+exports.down = async function (sql) {
+  await sql`DROP TABLE IF EXISTS data;`;
+};

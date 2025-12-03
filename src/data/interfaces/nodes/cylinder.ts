@@ -1,0 +1,13 @@
+import { Transform } from '../properties/transform';
+import { XYZ } from '../properties/xyz';
+
+export class Cylinder {
+  shapeClass: "cylinder";
+  name?: string;
+  mesh?: any;
+  transform?: Transform;
+  center?: XYZ;
+  radius?: number;
+  dz?: number;
+  normal?: XYZ;
+}
