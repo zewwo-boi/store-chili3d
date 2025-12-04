@@ -1,8 +1,9 @@
 import { Record } from './record';
 
 export class TimeRecord {
-  id?: string;
-  children?: TimeRecord[];
+  id: string;
+  children: string[];
+  parentId?: string;
   data?: Record;
   meta?: {
     timestamp?: number;
