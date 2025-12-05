@@ -69,7 +69,11 @@ export class DataService {
     commits.forEach((commit, i) => {
       commit.change.parentId = commit.parentId;
 
-      tree.get(commit.parentId)?.children.push(commit.change.id);
+      const parent = tree.get(commit.parentId);
+      // Prevent duplicates
+      if (parent && !parent.children.includes(commit.change.id)) {
+        parent.children.push(commit.change.id);
+      }
       tree.set(commit.change.id, commit.change);
     });
 
