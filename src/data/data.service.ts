@@ -19,16 +19,13 @@ export class DataService {
     const data = await this.sql<
       DataTable[]
     >`select * from data where id=${id} limit 1;`;
+
+    data[0].time_record = this.fromJsonb(data[0].time_record);
     return data[0];
   }
 
   async createData(data: SaveTimeRecordRequest): Promise<any[]> {
-    let string_data: string;
-    try {
-      string_data = JSON.stringify(data.payload);
-    } catch (err) {
-      throw new HttpException('Cyclic Entity', HttpStatus.UNPROCESSABLE_ENTITY);
-    }
+    let string_data: string = this.toJsonb(data.payload);
 
     try {
       const res = await this.sql`
@@ -49,12 +46,7 @@ export class DataService {
   }
 
   async updateRecord(id: string, data: TimeRecord[]): Promise<any[]> {
-    let string_data: string;
-    try {
-      string_data = JSON.stringify(data);
-    } catch (err) {
-      throw new HttpException('Cyclic Entity', HttpStatus.UNPROCESSABLE_ENTITY);
-    }
+    let string_data: string = this.toJsonb(data);
 
     try {
       const res = await this.sql`
@@ -73,13 +65,7 @@ export class DataService {
     const commits = data.commits;
     const storedData = (await this.findOneData(data.rootId)).time_record;
 
-    console.log(JSON.stringify(storedData));
-    console.log(storedData);
-    console.log('\n');
-
-    let tree = new Map(
-      Object.values(storedData).map((v, i) => [v.id as string, v]),
-    );
+    let tree = new Map(storedData.map((v, i) => [v.id as string, v]));
     commits.forEach((commit, i) => {
       commit.change.parentId = commit.parentId;
 
@@ -88,6 +74,29 @@ export class DataService {
     });
 
     return this.updateRecord(data.rootId, this.mapToArray(tree));
+  }
+
+  /**
+   * Convert jsonb into a regular object.
+   *
+   * @remarks
+   * This is designed to convert a json string returned by postgres.js that is falsely identifying as a native object.
+   */
+  fromJsonb<T>(from: T): T {
+    const data = from as unknown as string;
+
+    return JSON.parse(data) as T;
+  }
+
+  /**
+   * Converts object into json string representation
+   */
+  toJsonb<T>(from: T): string {
+    try {
+      return JSON.stringify(from);
+    } catch (err) {
+      throw new HttpException('Cyclic Entity', HttpStatus.UNPROCESSABLE_ENTITY);
+    }
   }
 
   mapToArray<K, V>(map: Map<K, V>) {
