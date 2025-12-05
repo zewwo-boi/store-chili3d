@@ -6,7 +6,7 @@ async function bootstrap() {
   config({ path: '.env.development.local' });
   config({ path: '.env' });
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { cors: true });
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
