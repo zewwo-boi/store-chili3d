@@ -1,17 +1,27 @@
-import { Injectable, Inject, HttpException, HttpStatus } from '@nestjs/common';
-import postgres, { SerializableParameter } from 'postgres';
+import {
+  Injectable,
+  Inject,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
+import postgres from 'postgres';
 import { DATABASE_CONNECTION } from '../database/database.provider';
 import { SaveTimeRecordRequest, TimeRecord } from './interfaces/main';
-import { Commits } from './interfaces/diff';
+import { Commits, Diff } from './interfaces/diff';
 import { DataTable } from './interfaces/database';
 
 @Injectable()
 export class DataService {
+  private readonly logger = new Logger(DataService.name);
+
   constructor(@Inject(DATABASE_CONNECTION) private sql: postgres.Sql) {}
 
-  async findAllData(): Promise<any[]> {
-    // Example: Fetch all users from the "USERS" table
-    const data = await this.sql`select * from data;`;
+  async findAllData(limit = 100, offset = 0): Promise<DataTable[]> {
+    const data = await this.sql<
+      DataTable[]
+    >`select * from data limit ${limit} offset ${offset};`;
     return data;
   }
 
@@ -20,18 +30,19 @@ export class DataService {
       DataTable[]
     >`select * from data where id=${id} limit 1;`;
 
-    data[0].time_record = this.fromJsonb(data[0].time_record);
+    if (data.length === 0) {
+      throw new NotFoundException(`Data with ID "${id}" not found.`);
+    }
+
     return data[0];
   }
 
   async createData(data: SaveTimeRecordRequest): Promise<any[]> {
-    let string_data: string = this.toJsonb(data.payload);
-
     try {
       const res = await this.sql`
       insert into data
       (id, time_record)
-      values (${data.id}, ${string_data});`;
+      values (${data.id}, ${this.sql.json(data.payload as any)});`;
       return res;
     } catch (error) {
       if (error.code === '23505') {
@@ -46,66 +57,58 @@ export class DataService {
   }
 
   async updateRecord(id: string, data: TimeRecord[]): Promise<any[]> {
-    let string_data: string = this.toJsonb(data);
-
     try {
       const res = await this.sql`
         update data
-        set time_record = ${string_data}
+        set time_record = ${this.sql.json(data as any)}
         where id = ${id};
       `;
       return res;
     } catch (err) {
-      // TODO: Handle error
+      this.logger.error(`Failed to update record ${id}`, err);
       throw err;
     }
   }
 
   async updateDataFromCommits(data: Commits) {
-    const commits = data.commits;
-    const storedData = (await this.findOneData(data.rootId)).time_record;
+    return this.sql.begin(async (sql) => {
+      const rows = await sql<
+        DataTable[]
+      >`select * from data where id=${data.rootId} for update;`;
 
-    let tree = new Map(storedData.map((v, i) => [v.id as string, v]));
-    commits.forEach((commit, i) => {
+      if (rows.length === 0) {
+        throw new NotFoundException(`Data with ID "${data.rootId}" not found.`);
+      }
+
+      const storedData = rows[0].time_record as unknown as TimeRecord[];
+      const updatedData = this.applyCommits(storedData, data.commits);
+
+      return sql`
+        update data
+        set time_record = ${sql.json(updatedData as any)}
+        where id = ${data.rootId};
+      `;
+    });
+  }
+
+  applyCommits(storedData: TimeRecord[], commits: Diff[]): TimeRecord[] {
+    const tree = new Map(storedData.map((v) => [v.id as string, v]));
+    commits.forEach((commit) => {
       commit.change.parentId = commit.parentId;
 
       const parent = tree.get(commit.parentId);
-      // Prevent duplicates
       if (parent && !parent.children.includes(commit.change.id)) {
         parent.children.push(commit.change.id);
       }
       tree.set(commit.change.id, commit.change);
     });
 
-    return this.updateRecord(data.rootId, this.mapToArray(tree));
-  }
-
-  /**
-   * Convert jsonb into a regular object.
-   *
-   * @remarks
-   * This is designed to convert a json string returned by postgres.js that is falsely identifying as a native object.
-   */
-  fromJsonb<T>(from: T): T {
-    const data = from as unknown as string;
-
-    return JSON.parse(data) as T;
-  }
-
-  /**
-   * Converts object into json string representation
-   */
-  toJsonb<T>(from: T): string {
-    try {
-      return JSON.stringify(from);
-    } catch (err) {
-      throw new HttpException('Cyclic Entity', HttpStatus.UNPROCESSABLE_ENTITY);
-    }
+    return this.mapToArray(tree);
   }
 
   mapToArray<K, V>(map: Map<K, V>) {
     const nodes: V[] = [];
-    map.forEach((v, i) => {
+    map.forEach((v) => {
       nodes.push(v);
     });
     return nodes;
